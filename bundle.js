@@ -1,25 +1,40 @@
+#!/usr/bin/env node
 //@ts-check
-var fs = require("fs");
-var cp = require('child_process')
+const fs = require("fs");
+const cp = require('child_process')
 const { readdirSync } = fs;
 
-var path = require("path");
+const path = require("path");
+const src = path.join(__dirname, "src");
 
-var src = path.join(__dirname, "src");
+console.time("bundle complete");
+(async () => {
+    const entryPoints = readdirSync(src)
+        .filter(f => f.endsWith(`.mjs`))
+        .map(f => path.join(src, f));
 
-let files =  readdirSync(src);
-
-for (let file of files){
-    if(file.endsWith(`.mjs`)){
-        var p = path.join(src,file)
-        var o = path.join(src,file.slice(0,file.length - `.mjs`.length) + `.bundle.js`);
-        console.log(`${p} => ${o}`)
-        var out = cp.spawnSync(`./node_modules/.bin/esbuild ${p} --bundle --define:process.env.NODE_ENV=\"\\"production\\"\" --minify-syntax --outfile=${o}`,{shell:true, encoding: 'utf-8'})
-        console.log(out.stderr)
-        if(out.status!==0){
-            console.log(out.stderr)
-        }
+    // Start the esbuild child process
+    const { startService } = require('esbuild');
+    const service = await startService();
+    try {
+        // build all entry points
+        await service.build({
+            target: "es2020",
+            bundle: true,
+            minifySyntax: true,
+            sourcemap: false,
+            logLevel: "info",
+            define: {
+                ["process.env.NODE_ENV"]: "'production'"
+            },
+            entryPoints,
+            outdir: src,
+            outExtension: {
+                ".js": ".bundle.js"
+            }
+        });
+    } finally {
+        service.stop();
+        console.timeEnd("bundle complete");
     }
-    
-}
-
+})()
